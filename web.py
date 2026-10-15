@@ -3,13 +3,11 @@ Flask web panel for cruftcast, plus the podcast feed and episode files.
 LAN and tailnet only; no authentication, by design (same as wireburst).
 """
 
-import asyncio
 import logging
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import edge_tts
 from flask import Flask, Response, abort, redirect, render_template, request, send_from_directory, url_for
 
 import db
@@ -20,27 +18,21 @@ log = logging.getLogger("cruftcast.web")
 
 app = Flask(__name__)
 
-_voice_cache: list[tuple[str, str]] = []
-
-
-def _english_voices() -> list[tuple[str, str]]:
-    """
-    (name, label) pairs for the settings form's voice dropdown, e.g.
-    ("en-US-AvaNeural", "en-US-AvaNeural (Female: Expressive, Caring, ...)").
-    Empty if edge-tts is unreachable; the form then falls back to a text box.
-    """
-    if not _voice_cache:
-        try:
-            voices = asyncio.run(edge_tts.list_voices())
-            for v in sorted(voices, key=lambda v: v["ShortName"]):
-                if not v["Locale"].startswith("en-"):
-                    continue
-                tags = ", ".join(v.get("VoiceTag", {}).get("VoicePersonalities", []))
-                detail = f"{v['Gender']}: {tags}" if tags else v["Gender"]
-                _voice_cache.append((v["ShortName"], f"{v['ShortName']} ({detail})"))
-        except Exception as exc:
-            log.warning("Could not list edge-tts voices: %s", exc)
-    return _voice_cache
+# The voice dropdown: American edge-tts voices with lively or conversational
+# tags (labels are Microsoft's own descriptions). Left out on purpose: the
+# child voice (Ana), the "Rational" and "Authority" voices (Eric, Steffan,
+# Christopher), the Multilingual duplicates, and all non-US voices.
+VOICES = [
+    ("en-US-AvaNeural", "Ava (female: expressive, caring, pleasant, friendly)"),
+    ("en-US-EmmaNeural", "Emma (female: cheerful, clear, conversational)"),
+    ("en-US-AriaNeural", "Aria (female: positive, confident)"),
+    ("en-US-JennyNeural", "Jenny (female: friendly, considerate, comfort)"),
+    ("en-US-MichelleNeural", "Michelle (female: friendly, pleasant)"),
+    ("en-US-AndrewNeural", "Andrew (male: warm, confident, authentic, honest)"),
+    ("en-US-BrianNeural", "Brian (male: approachable, casual, sincere)"),
+    ("en-US-GuyNeural", "Guy (male: passion)"),
+    ("en-US-RogerNeural", "Roger (male: lively)"),
+]
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
@@ -178,7 +170,7 @@ def settings_page():
                                for topic in topics)
     now_local = datetime.now(ZoneInfo(settings["timezone"])) if not errors else None
     return render_template("settings.html", s=settings, errors=errors, saved=saved,
-                           exclusion_text=exclusion_text, voices=_english_voices(),
+                           exclusion_text=exclusion_text, voices=VOICES,
                            efforts=EFFORTS, now_local=now_local)
 
 

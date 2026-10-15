@@ -48,15 +48,10 @@
   <div class="panel-title">Voice and sound</div>
   <div class="row">
     <div><label>Voice</label>
-    {% if voices %}
       <select name="voice">
         {% if s.voice not in voices | map("first") %}<option value="{{ s.voice }}" selected>{{ s.voice }}</option>{% endif %}
         {% for name, label in voices %}<option value="{{ name }}" {% if name == s.voice %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
-    {% else %}
-      <input type="text" name="voice" value="{{ s.voice }}" size="28">
-      <p class="hint">The voice list could not be loaded from edge-tts; type a voice name.</p>
-    {% endif %}
     </div>
     <div><label>Rate</label><input type="text" name="rate" value="{{ s.rate }}" size="6"></div>
     <div><label>Pitch</label><input type="text" name="pitch" value="{{ s.pitch }}" size="6"></div>
