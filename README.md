@@ -62,7 +62,17 @@ Edit `.env`:
 | `CRUFTCAST_PUBLIC_URL` | Initial public base URL: the address your phone uses to reach this server, e.g. `http://your-nas:8091`. Episode links in the feed are built from it. After first start this is a setting in the web panel. |
 | `CRUFTCAST_UID`, `CRUFTCAST_GID` | Owner for files in `./data`. Use `id -u` and `id -g` on the host so you can manage the folder over SMB. |
 
-The OPML URL is fetched from **inside the container**. A hostname that works on your desktop may not resolve there; if the feed list fails to load, try the server's LAN IP address.
+The OPML URL is fetched from **inside the container**. A hostname that works on your desktop may not resolve there, and on some hosts (QNAP Container Station among them) a container cannot connect to ports published on the host at all. If wireburst runs on the same Docker host, join its network and use the container name instead. Put this in `docker-compose.override.yml` (gitignored; Compose loads it automatically) and set the OPML URL to `http://wireburst:8082/opml/export`:
+
+```yaml
+services:
+  cruftcast:
+    networks: [default, wireburst]
+networks:
+  wireburst:
+    external: true
+    name: wireburst_default
+```
 
 ### 2. Artwork
 
