@@ -20,6 +20,7 @@ DEFAULT_SETTINGS: dict = {
     "target_minutes": 10,
     "min_minutes": 5,
     "max_minutes": 15,
+    "max_story_seconds": 60,
     "category_priority": ["Weblog", "Tech News"],
     "excluded_categories": ["Personal"],
     "excluded_feeds": [

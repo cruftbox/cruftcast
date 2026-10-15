@@ -10,6 +10,7 @@ Both calls return JSON constrained by a schema (structured outputs).
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 import anthropic
@@ -97,6 +98,38 @@ def word_budget(settings: dict) -> tuple[int, int]:
             settings["max_minutes"] * WORDS_PER_MINUTE)
 
 
+def story_word_cap(settings: dict) -> int:
+    """
+    Words that fit in max_story_seconds at the configured speaking rate.
+    A rate of +10% speaks 10% more words in the same time.
+    """
+    rate = int(settings["rate"].rstrip("%"))
+    words_per_second = WORDS_PER_MINUTE / 60 * (1 + rate / 100)
+    return max(20, int(settings["max_story_seconds"] * words_per_second))
+
+
+STORY_CAP_SLACK = 1.15  # Claude's counts are approximate; only trim clear overruns
+
+
+def trim_story(text: str, cap: int) -> str:
+    """
+    Backstop for a story Claude wrote too long: keep whole sentences up to
+    the cap. Never cuts mid-sentence, and always keeps the first sentence.
+    """
+    if len(text.split()) <= cap * STORY_CAP_SLACK:
+        return text
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    kept, words = [], 0
+    for sentence in sentences:
+        n = len(sentence.split())
+        if kept and words + n > cap:
+            break
+        kept.append(sentence)
+        words += n
+    log.info("Trimmed a story from %d to %d words (cap %d)", len(text.split()), words, cap)
+    return " ".join(kept)
+
+
 # ── Selection ────────────────────────────────────────────────────────────────
 
 SELECTION_SCHEMA = {
@@ -160,7 +193,7 @@ def select_stories(candidates: list[Candidate], settings: dict) -> list[Segment]
     if not candidates:
         return []
     target_words, _ = word_budget(settings)
-    max_stories = max(1, round(target_words / WORDS_PER_STORY))
+    max_stories = max(1, round(target_words / min(WORDS_PER_STORY, story_word_cap(settings))))
 
     by_category: dict[str, list[dict]] = {}
     for c in candidates:
@@ -232,7 +265,8 @@ Writing for the ear:
   speech engine might misread them.
 
 Length: aim for the target word count across all stories. If the material is thin, a shorter
-script is fine; do not pad. Never exceed the maximum."""
+script is fine; do not pad. Never exceed the maximum. Each story also has a maximum word count;
+when a story has a lot of material, summarize harder rather than run over it."""
 
 
 def write_script(segments: list[Segment], extras: dict[str, int],
@@ -250,13 +284,15 @@ def write_script(segments: list[Segment], extras: dict[str, int],
         })
     extra_note = {name: n for name, n in extras.items()
                   if any(c.feed_title == name for s in segments for c in s.items)}
+    cap = story_word_cap(settings)
     user = (
-        f"Target words: {target_words}. Maximum words: {max_words}.\n"
+        f"Target words: {target_words}. Maximum words: {max_words}. "
+        f"Maximum words per story: {cap}.\n"
         f"Weblogs with more posts than covered (blog: extra posts): {json.dumps(extra_note)}\n\n"
         f"Stories:\n{json.dumps(stories, ensure_ascii=False, indent=1)}"
     )
     data = _call_json(settings, SCRIPT_SYSTEM, user, SCRIPT_SCHEMA)
-    stories = [s.strip() for s in data["stories"] if s.strip()]
+    stories = [trim_story(s.strip(), cap) for s in data["stories"] if s.strip()]
     if not stories:
         raise ScriptError("Claude returned an empty script")
     sign_off = data["sign_off"].strip() or "That's cruftcast for today."

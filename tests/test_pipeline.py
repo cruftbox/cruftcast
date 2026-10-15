@@ -159,3 +159,17 @@ def test_concat_real_files_with_chime(tmp_path):
     synthesizer.concat(synthesizer.episode_order([clips[0], clips[1], clips[0]], chime),
                        out, gap_ms=300)
     assert synthesizer.duration_seconds(out) >= 2
+
+
+def test_story_word_cap_follows_rate():
+    base = dict(db.DEFAULT_SETTINGS, max_story_seconds=60)
+    assert scriptwriter.story_word_cap(dict(base, rate="+0%")) == 150
+    assert scriptwriter.story_word_cap(dict(base, rate="+20%")) == 180
+
+
+def test_trim_story_keeps_whole_sentences():
+    long = " ".join(f"Sentence number {i} has six words." for i in range(40))  # 240 words
+    trimmed = scriptwriter.trim_story(long, 30)
+    assert trimmed.endswith(".") and len(trimmed.split()) <= 30
+    short = "One short story. Two sentences."
+    assert scriptwriter.trim_story(short, 30) == short

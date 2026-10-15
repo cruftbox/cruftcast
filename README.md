@@ -120,6 +120,7 @@ The web panel is at `http://<server>:8091`.
 |---|---|---|
 | Run time, timezone | 06:00, America/Los_Angeles | One scheduled run per day. If the container was down at the run time, it runs when it comes back the same day. Failed runs are not retried. |
 | Minimum, target, maximum minutes | 5, 10, 15 | Converted to a word budget at about 150 spoken words per minute. |
+| Max seconds per story | 60 | Converted to a word limit using the speaking rate and given to Claude. A story that still runs more than 15% over is cut back to whole sentences that fit. |
 | Category priority | Weblog, Tech News | Highest first. Categories not listed come after, in no order. Priority decides what makes the cut; the stories are read in a mixed order. |
 | Weblog category, max items per weblog | Weblog, 2 | |
 | Topic exclusions | Tech News: mobile phone news, Android news | One per line as `Category: topic`; use `*` as the category to exclude a topic everywhere (`*: Trump`). Claude judges each item's topic; these are not keyword matches. |

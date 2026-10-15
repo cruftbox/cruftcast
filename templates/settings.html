@@ -20,6 +20,7 @@
     <div><label>Minimum</label><input type="number" name="min_minutes" value="{{ s.min_minutes }}" min="1" max="60"></div>
     <div><label>Target</label><input type="number" name="target_minutes" value="{{ s.target_minutes }}" min="1" max="60"></div>
     <div><label>Maximum</label><input type="number" name="max_minutes" value="{{ s.max_minutes }}" min="1" max="60"></div>
+    <div><label>Max seconds per story</label><input type="number" name="max_story_seconds" value="{{ s.max_story_seconds }}" min="15" max="600"></div>
   </div>
   <p class="hint">On a slow day the episode can be shorter than the minimum; nothing is padded.</p>
 </div>

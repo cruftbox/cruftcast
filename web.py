@@ -80,6 +80,7 @@ def health():
 LIST_FIELDS = ("category_priority", "excluded_categories", "excluded_feeds")
 INT_FIELDS = {
     "target_minutes": (1, 60), "min_minutes": (1, 60), "max_minutes": (1, 60),
+    "max_story_seconds": (15, 600),
     "weblog_cap": (0, 20), "gap_ms": (0, 3000), "retention_days": (1, 365),
     "article_char_budget": (500, 50000),
 }
