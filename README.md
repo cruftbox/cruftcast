@@ -122,7 +122,7 @@ The web panel is at `http://<server>:8091`.
 | Minimum, target, maximum minutes | 5, 10, 15 | Converted to a word budget at about 150 spoken words per minute. |
 | Category priority | Weblog, Tech News | Highest first. Categories not listed come after, in no order. Priority decides what makes the cut; the stories are read in a mixed order. |
 | Weblog category, max items per weblog | Weblog, 2 | |
-| Topic exclusions | Tech News: mobile phone news, Android news | One per line as `Category: topic`. Claude judges each item's topic; these are not keyword matches. |
+| Topic exclusions | Tech News: mobile phone news, Android news | One per line as `Category: topic`; use `*` as the category to exclude a topic everywhere (`*: Trump`). Claude judges each item's topic; these are not keyword matches. |
 | Excluded categories, excluded feed URLs | | Dropped before anything else happens. |
 | Article characters per story | 6000 | Long posts are cut to this length before going to Claude. |
 | Voice, rate, pitch | en-US-AvaNeural, +0%, +0Hz | Any edge-tts voice name works. |

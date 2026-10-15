@@ -34,7 +34,7 @@
   </div>
   <div class="field"><label>Topic exclusions (one per line, as "Category: topic")</label>
     <textarea name="topic_exclusions">{{ exclusion_text }}</textarea>
-    <p class="hint">Topics are judged by Claude, not matched as keywords.</p></div>
+    <p class="hint">Topics are judged by Claude, not matched as keywords. Use * as the category to exclude a topic everywhere, e.g. "*: Trump".</p></div>
   <div class="field"><label>Excluded categories (one per line)</label>
     <textarea name="excluded_categories">{{ s.excluded_categories | join("\n") }}</textarea></div>
   <div class="field"><label>Excluded feed URLs (one per line)</label>
@@ -46,9 +46,18 @@
 
 <div class="panel">
   <div class="panel-title">Voice and sound</div>
-  <datalist id="voices">{% for v in voices %}<option value="{{ v }}">{% endfor %}</datalist>
   <div class="row">
-    <div><label>Voice</label><input type="text" name="voice" value="{{ s.voice }}" list="voices" size="28"></div>
+    <div><label>Voice</label>
+    {% if voices %}
+      <select name="voice">
+        {% if s.voice not in voices | map("first") %}<option value="{{ s.voice }}" selected>{{ s.voice }}</option>{% endif %}
+        {% for name, label in voices %}<option value="{{ name }}" {% if name == s.voice %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="voice" value="{{ s.voice }}" size="28">
+      <p class="hint">The voice list could not be loaded from edge-tts; type a voice name.</p>
+    {% endif %}
+    </div>
     <div><label>Rate</label><input type="text" name="rate" value="{{ s.rate }}" size="6"></div>
     <div><label>Pitch</label><input type="text" name="pitch" value="{{ s.pitch }}" size="6"></div>
   </div>

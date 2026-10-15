@@ -24,6 +24,13 @@ def test_opening_line_and_titles():
     assert pipeline.episode_title(LOCAL, "adhoc") == "cruftcast for Thursday, October 15, 2026 (extra)"
 
 
+def test_wildcard_topic_exclusions():
+    got = scriptwriter.expand_exclusions(
+        {"Tech News": ["Android news"], "*": ["Trump"]}, ["Tech News", "News", "All"])
+    assert got == {"Tech News": ["Android news", "Trump"], "News": ["Trump"], "All": ["Trump"]}
+    assert scriptwriter.expand_exclusions({"Tech News": ["Android news"]}, ["News"]) == {}
+
+
 def test_scheduler_due():
     now = datetime(2026, 10, 15, 6, 0, 30)
     assert scheduler.due(now, "06:00", already_ran=False)

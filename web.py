@@ -20,16 +20,24 @@ log = logging.getLogger("cruftcast.web")
 
 app = Flask(__name__)
 
-_voice_cache: list[str] = []
+_voice_cache: list[tuple[str, str]] = []
 
 
-def _english_voices() -> list[str]:
-    """Voice names for the settings form's suggestions; empty if edge-tts is unreachable."""
+def _english_voices() -> list[tuple[str, str]]:
+    """
+    (name, label) pairs for the settings form's voice dropdown, e.g.
+    ("en-US-AvaNeural", "en-US-AvaNeural (Female: Expressive, Caring, ...)").
+    Empty if edge-tts is unreachable; the form then falls back to a text box.
+    """
     if not _voice_cache:
         try:
             voices = asyncio.run(edge_tts.list_voices())
-            _voice_cache.extend(sorted(v["ShortName"] for v in voices
-                                       if v["Locale"].startswith("en-")))
+            for v in sorted(voices, key=lambda v: v["ShortName"]):
+                if not v["Locale"].startswith("en-"):
+                    continue
+                tags = ", ".join(v.get("VoiceTag", {}).get("VoicePersonalities", []))
+                detail = f"{v['Gender']}: {tags}" if tags else v["Gender"]
+                _voice_cache.append((v["ShortName"], f"{v['ShortName']} ({detail})"))
         except Exception as exc:
             log.warning("Could not list edge-tts voices: %s", exc)
     return _voice_cache

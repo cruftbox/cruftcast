@@ -137,6 +137,25 @@ How to choose:
 - `topic` is a few words naming the story, for logs only."""
 
 
+WILDCARD = "*"
+
+
+def expand_exclusions(topic_exclusions: dict[str, list[str]],
+                      categories) -> dict[str, list[str]]:
+    """
+    Per-category topic exclusions, with the "*" entry added to every
+    category. Done here rather than explained to Claude so the rule is exact;
+    "*" is used because wireburst has a real category named "All".
+    """
+    everywhere = topic_exclusions.get(WILDCARD, [])
+    result = {}
+    for category in categories:
+        topics = topic_exclusions.get(category, []) + everywhere
+        if topics:
+            result[category] = topics
+    return result
+
+
 def select_stories(candidates: list[Candidate], settings: dict) -> list[Segment]:
     if not candidates:
         return []
@@ -152,7 +171,7 @@ def select_stories(candidates: list[Candidate], settings: dict) -> list[Segment]
             "excerpt": truncate(c.text, EXCERPT_CHARS),
         })
 
-    exclusions = {k: v for k, v in settings["topic_exclusions"].items() if v}
+    exclusions = expand_exclusions(settings["topic_exclusions"], by_category)
     user = (
         f"Maximum number of stories: {max_stories}\n"
         f"Category priority (highest first): {json.dumps(settings['category_priority'])}\n"
