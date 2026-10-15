@@ -45,21 +45,18 @@
 </div>
 
 <div class="panel">
-  <div class="panel-title">Voices</div>
+  <div class="panel-title">Voice and sound</div>
   <datalist id="voices">{% for v in voices %}<option value="{{ v }}">{% endfor %}</datalist>
   <div class="row">
-    <div><label>Lead voice</label><input type="text" name="lead_voice" value="{{ s.lead_voice }}" list="voices" size="28"></div>
-    <div><label>Rate</label><input type="text" name="lead_rate" value="{{ s.lead_rate }}" size="6"></div>
-    <div><label>Pitch</label><input type="text" name="lead_pitch" value="{{ s.lead_pitch }}" size="6"></div>
+    <div><label>Voice</label><input type="text" name="voice" value="{{ s.voice }}" list="voices" size="28"></div>
+    <div><label>Rate</label><input type="text" name="rate" value="{{ s.rate }}" size="6"></div>
+    <div><label>Pitch</label><input type="text" name="pitch" value="{{ s.pitch }}" size="6"></div>
   </div>
   <div class="row">
-    <div><label>Second voice</label><input type="text" name="second_voice" value="{{ s.second_voice }}" list="voices" size="28"></div>
-    <div><label>Rate</label><input type="text" name="second_rate" value="{{ s.second_rate }}" size="6"></div>
-    <div><label>Pitch</label><input type="text" name="second_pitch" value="{{ s.second_pitch }}" size="6"></div>
+    <div><label><input type="checkbox" name="chime" {% if s.chime %}checked{% endif %}> Chime between stories</label></div>
+    <div><label>Pause around the chime and before the sign-off (ms)</label><input type="number" name="gap_ms" value="{{ s.gap_ms }}" min="0" max="3000"></div>
   </div>
-  <div class="row">
-    <div><label>Pause between turns (ms)</label><input type="number" name="gap_ms" value="{{ s.gap_ms }}" min="0" max="3000"></div>
-  </div>
+  <p class="hint">To use your own chime, put chime.mp3 in the data folder.</p>
 </div>
 
 <div class="panel">

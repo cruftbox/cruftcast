@@ -1,6 +1,6 @@
 # cruftcast
 
-cruftcast turns a set of RSS feeds into a private daily podcast. Every morning it reads the feeds, has Claude choose the stories and write a two-host conversation about them, voices the script with Microsoft's neural voices through [edge-tts](https://github.com/rany2/edge-tts), and publishes the episode to a podcast RSS feed served from the same container.
+cruftcast turns a set of RSS feeds into a private daily podcast. Every morning it reads the feeds, has Claude choose the stories and write a script about them, reads it in one of Microsoft's neural voices through [edge-tts](https://github.com/rany2/edge-tts), and publishes the episode to a podcast RSS feed served from the same container.
 
 It is built to run on a low-power NAS: no AI model runs locally. Claude does the writing over the Anthropic API, and edge-tts does the voices over the network. The NAS only fetches feeds, calls ffmpeg to join audio files, and serves files.
 
@@ -12,11 +12,11 @@ The feed list comes from the OPML export of [wireburst](https://github.com/cruft
 
 1. **Feeds.** Fetch the OPML (falling back to the last good copy if it can't be reached), drop excluded categories and feeds, and poll every feed in parallel.
 2. **Window.** A scheduled episode covers everything published since the previous scheduled episode, minus anything already used. A **Generate now** episode covers the last 24 hours and does not affect the next scheduled one.
-3. **Weblog cap.** Each feed in the weblog category contributes at most N items (newest first). The hosts mention when a blog posted more.
+3. **Weblog cap.** Each feed in the weblog category contributes at most N items (newest first). The script mentions when a blog posted more.
 4. **Selection (Claude).** Claude sees the title and a short excerpt of every candidate and picks the stories: higher-priority categories first, topic exclusions applied per category, duplicate coverage of one story merged into one segment, and no more stories than fit the target length.
 5. **Articles.** For the chosen stories only, feeds that carry the full post are used as they are. Short feed text (link posts, teasers) gets the linked page fetched with trafilatura; the blogger's own words are kept in front of the article. If a fetch fails or hits a paywall, the feed text is used.
-6. **Script (Claude).** Claude writes the dialogue as JSON turns labeled `lead` or `second`. The opening line ("This is cruftcast for Thursday, October 15. There are 7 items today.") is added by code.
-7. **Voices.** One edge-tts request per turn, retried with backoff, then ffmpeg joins the clips (with a short pause between turns) without re-encoding.
+6. **Script (Claude).** Claude writes one self-contained section per story, plus a sign-off. The opening line ("This is cruftcast for Thursday, October 15. There are 7 items today.") is added by code.
+7. **Voice.** One edge-tts request per section, retried with backoff. ffmpeg joins the clips without re-encoding, with a chime before each story. The bundled chime (`assets/chime.mp3`, made by `tools/render_chime.sh`) is replaced by `chime.mp3` in the data folder if you put one there.
 8. **Publish.** The episode is added to the feed and episodes older than the retention period are deleted.
 
 On a slow day the episode is shorter; nothing is padded. With no new items at all, a short "no new items today" episode is published.
@@ -125,8 +125,9 @@ The web panel is at `http://<server>:8091`.
 | Topic exclusions | Tech News: mobile phone news, Android news | One per line as `Category: topic`. Claude judges each item's topic; these are not keyword matches. |
 | Excluded categories, excluded feed URLs | | Dropped before anything else happens. |
 | Article characters per story | 6000 | Long posts are cut to this length before going to Claude. |
-| Lead and second voice, rate, pitch | en-US-AvaNeural, en-US-GuyNeural | The lead introduces each story and opens and closes the show. Any edge-tts voice name works. |
-| Pause between turns | 300 ms | |
+| Voice, rate, pitch | en-US-AvaNeural, +0%, +0Hz | Any edge-tts voice name works. |
+| Chime between stories | on | |
+| Pause around the chime and before the sign-off | 400 ms | |
 | Model, effort | claude-opus-5-5, high | Both Claude calls use these. |
 | OPML URL, public base URL | from `.env` | |
 | Keep episodes (days) | 14 | Older MP3s are deleted and drop out of the feed. |
@@ -147,6 +148,7 @@ The web panel is at `http://<server>:8091`.
 | `web.py`, `templates/` | The web panel. |
 | `db.py` | SQLite schema and settings defaults. |
 | `opml.py` | OPML parsing (from wireburst). |
+| `assets/chime.mp3` | The chime played before each story. Regenerate with `tools/render_chime.sh` (needs ffmpeg). |
 | `failure_audio/` | Pre-recorded failure clips. Regenerate with `python tools/render_failure_audio.py`. |
 | `data/` | Database, episodes, OPML cache, artwork. Not in git. |
 

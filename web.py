@@ -83,8 +83,8 @@ INT_FIELDS = {
     "weblog_cap": (0, 20), "gap_ms": (0, 3000), "retention_days": (1, 365),
     "article_char_budget": (500, 50000),
 }
-TEXT_FIELDS = ("weblog_category", "lead_voice", "second_voice", "lead_rate", "lead_pitch",
-               "second_rate", "second_pitch", "model", "effort", "opml_url", "public_base_url")
+TEXT_FIELDS = ("weblog_category", "voice", "rate", "pitch", "model", "effort",
+               "opml_url", "public_base_url")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
@@ -136,12 +136,13 @@ def parse_settings_form(form) -> tuple[dict, list[str]]:
 
     for name in TEXT_FIELDS:
         values[name] = form.get(name, "").strip()
-    for name in ("lead_rate", "second_rate"):
-        if not re.fullmatch(r"[+-]\d{1,3}%", values[name]):
-            errors.append(f"{name.replace('_', ' ').capitalize()} must look like +0% or -10%.")
-    for name in ("lead_pitch", "second_pitch"):
-        if not re.fullmatch(r"[+-]\d{1,3}Hz", values[name]):
-            errors.append(f"{name.replace('_', ' ').capitalize()} must look like +0Hz or -5Hz.")
+    values["chime"] = form.get("chime") == "on"
+    if not values["voice"]:
+        errors.append("Voice is required.")
+    if not re.fullmatch(r"[+-]\d{1,3}%", values["rate"]):
+        errors.append("Rate must look like +0% or -10%.")
+    if not re.fullmatch(r"[+-]\d{1,3}Hz", values["pitch"]):
+        errors.append("Pitch must look like +0Hz or -5Hz.")
     if values["effort"] not in EFFORTS:
         errors.append(f"Effort must be one of {', '.join(EFFORTS)}.")
     for name, label in (("opml_url", "OPML URL"), ("public_base_url", "Public base URL")):

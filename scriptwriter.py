@@ -1,5 +1,5 @@
 """
-Claude calls: choosing the stories, then writing the two-host dialogue.
+Claude calls: choosing the stories, then writing the script.
 
 Selection sees only titles and short excerpts for every candidate, because the
 news feeds alone produce hundreds of items a day. Full articles are fetched
@@ -179,54 +179,46 @@ def select_stories(candidates: list[Candidate], settings: dict) -> list[Segment]
 SCRIPT_SCHEMA = {
     "type": "object",
     "properties": {
-        "turns": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "speaker": {"type": "string", "enum": ["lead", "second"]},
-                    "text": {"type": "string"},
-                },
-                "required": ["speaker", "text"],
-                "additionalProperties": False,
-            },
-        },
+        "stories": {"type": "array", "items": {"type": "string"}},
+        "sign_off": {"type": "string"},
     },
-    "required": ["turns"],
+    "required": ["stories", "sign_off"],
     "additionalProperties": False,
 }
 
 SCRIPT_SYSTEM = """\
 You write the script for cruftcast, a short private daily news podcast for one listener, read
-by two text-to-speech voices.
+by a single text-to-speech voice. There is one host and no dialogue.
 
-The hosts:
-- "lead" introduces every story and carries the summary.
-- "second" reacts, adds a detail or context, or asks the question the listener would ask.
+Return one entry in `stories` per story, in the order they should be read, and a one-line
+`sign_off`. A chime plays between stories, so each story stands on its own: no transitions
+like "next up" or "moving on", and no references to other stories.
 
 Content:
 - Mainly summaries. Add a brief opinion only when it gives the listener information they
   would not otherwise get. No filler enthusiasm.
 - Name the source of each story: the site, or the author for personal weblogs.
-- When a segment has several sources covering the same story, combine them into one telling
-  and mention each source.
+- When a story has several sources covering it, combine them into one telling and mention
+  each source.
 - Some weblogs had more posts than are covered. When covering one of those blogs, say briefly
   that it posted more (for example, "Simon Willison posted four more times since yesterday").
 - Mix the stories up; do not group them by category.
 - The opening line ("This is cruftcast for ...") is added separately. Start directly with the
-  first story. End with a one-line sign-off from the lead.
+  first story.
 
 Writing for the ear:
-- Short sentences. Each turn is one to three sentences, then the other host speaks.
+- Short, clear sentences in plain paragraphs.
 - No URLs, markdown, lists, emoji, or stage directions. Plain spoken English only.
 - Write numbers, dates, and abbreviations the way a person would say them when a
   speech engine might misread them.
 
-Length: aim for the target word count across all turns. If the material is thin, a shorter
+Length: aim for the target word count across all stories. If the material is thin, a shorter
 script is fine; do not pad. Never exceed the maximum."""
 
 
-def write_script(segments: list[Segment], extras: dict[str, int], settings: dict) -> list[dict]:
+def write_script(segments: list[Segment], extras: dict[str, int],
+                 settings: dict) -> tuple[list[str], str]:
+    """Returns the story texts in reading order and the sign-off line."""
     target_words, max_words = word_budget(settings)
     stories = []
     for seg in segments:
@@ -245,9 +237,10 @@ def write_script(segments: list[Segment], extras: dict[str, int], settings: dict
         f"Stories:\n{json.dumps(stories, ensure_ascii=False, indent=1)}"
     )
     data = _call_json(settings, SCRIPT_SYSTEM, user, SCRIPT_SCHEMA)
-    turns = [t for t in data["turns"] if t["text"].strip()]
-    if not turns:
+    stories = [s.strip() for s in data["stories"] if s.strip()]
+    if not stories:
         raise ScriptError("Claude returned an empty script")
-    words = sum(len(t["text"].split()) for t in turns)
-    log.info("Script: %d turns, %d words", len(turns), words)
-    return turns
+    sign_off = data["sign_off"].strip() or "That's cruftcast for today."
+    words = sum(len(s.split()) for s in stories) + len(sign_off.split())
+    log.info("Script: %d stories, %d words", len(stories), words)
+    return stories, sign_off

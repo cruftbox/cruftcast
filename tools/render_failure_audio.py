@@ -23,7 +23,7 @@ from pipeline import FAILURE_AUDIO_DIR, STAGE_PHRASES  # noqa: E402
 
 async def main():
     FAILURE_AUDIO_DIR.mkdir(exist_ok=True)
-    voice = DEFAULT_SETTINGS["lead_voice"]
+    voice = DEFAULT_SETTINGS["voice"]
     for stage, phrase in STAGE_PHRASES.items():
         text = (f"This is cruftcast. Today's episode failed while {phrase}, "
                 "and the voice service could not be reached to say more. "

@@ -91,13 +91,12 @@ def stubbed(data_dir, monkeypatch):
     monkeypatch.setattr(scriptwriter, "select_stories",
                         lambda c, s: [scriptwriter.Segment("story", c)])
     monkeypatch.setattr(scriptwriter, "write_script",
-                        lambda seg, ex, s: [{"speaker": "lead", "text": "Hi."},
-                                            {"speaker": "second", "text": "Bye."}])
+                        lambda seg, ex, s: (["Story one."], "Bye."))
     monkeypatch.setattr(synthesizer, "duration_seconds", lambda p: 42)
     spoken = []
 
-    def fake_synth(turns, settings, out):
-        spoken.extend(turns)
+    def fake_synth(opening, stories, sign_off, settings, out):
+        spoken.extend([opening, *stories, sign_off])
         Path(out).write_bytes(b"mp3")
     monkeypatch.setattr(synthesizer, "synthesize", fake_synth)
     return spoken
@@ -111,8 +110,9 @@ def test_scheduled_run_publishes_and_marks_used(stubbed):
         used = conn.execute("SELECT COUNT(*) FROM items WHERE used_in IS NOT NULL").fetchone()[0]
     assert run["status"] == "ok", run["log"]
     assert len(eps) == 1 and eps[0]["item_count"] == 1 and eps[0]["duration_s"] == 42
-    assert stubbed[0]["text"].startswith("This is cruftcast for ")
-    assert stubbed[0]["text"].endswith("There is 1 item today.")
+    assert stubbed[0].startswith("This is cruftcast for ")
+    assert stubbed[0].endswith("There is 1 item today.")
+    assert stubbed[1:] == ["Story one.", "Bye."]
     # poll_feeds is stubbed, so mark_used updates no existing rows; the call path is what matters.
     assert used == 0
     assert (db.EPISODES_DIR / eps[0]["filename"]).exists()
@@ -136,9 +136,19 @@ def test_failure_uses_prerendered_clip_when_tts_down(stubbed, monkeypatch):
     assert (db.EPISODES_DIR / eps[0]["filename"]).read_bytes() == clip
 
 
+def test_episode_order_puts_chime_before_each_story():
+    opening, s1, s2, sign_off, chime = (Path(n) for n in ("o", "s1", "s2", "end", "chime"))
+    assert synthesizer.episode_order([opening, s1, s2, sign_off], chime) == \
+        [opening, chime, s1, chime, s2, sign_off]
+    assert synthesizer.episode_order([opening, s1, sign_off], None) == [opening, s1, sign_off]
+
+
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
-def test_concat_real_files(tmp_path):
+def test_concat_real_files_with_chime(tmp_path):
     clips = sorted(pipeline.FAILURE_AUDIO_DIR.glob("*.mp3"))[:2]
+    chime = tmp_path / "chime.mp3"
+    synthesizer._conform(synthesizer.BUNDLED_CHIME, chime)
     out = tmp_path / "joined.mp3"
-    synthesizer.concat(clips, out, gap_ms=300)
+    synthesizer.concat(synthesizer.episode_order([clips[0], clips[1], clips[0]], chime),
+                       out, gap_ms=300)
     assert synthesizer.duration_seconds(out) >= 2

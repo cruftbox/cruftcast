@@ -147,10 +147,10 @@ def _run(kind: str) -> int:
             ingest.fetch_articles([c for s in segments for c in s.items],
                                   settings["article_char_budget"])
             enter("script")
-            turns = scriptwriter.write_script(segments, extras, settings)
-            turns.insert(0, {"speaker": "lead", "text": opening_line(local, len(segments))})
+            stories, sign_off = scriptwriter.write_script(segments, extras, settings)
             enter("voice")
-            synthesizer.synthesize(turns, settings, part)
+            synthesizer.synthesize(opening_line(local, len(stories)), stories, sign_off,
+                                   settings, part)
         else:
             log.info("No stories today; publishing a short no-news episode")
             enter("voice")
