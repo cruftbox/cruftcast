@@ -44,6 +44,7 @@ def test_build_rss(data_dir):
     assert enc.get("length") == "1234" and enc.get("type") == "audio/mpeg"
     assert root.find(f"channel/{{{feed_generator.ITUNES}}}image").get("href") == "http://nas:8091/artwork.png"
     assert root.find("channel/item/guid").text == "g1"
+    assert root.find("channel/item/description").text == "cruftcast for X. 7 items."
 
 
 def test_retention_deletes_old_episodes(data_dir):

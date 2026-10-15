@@ -33,6 +33,14 @@ def _it(tag: str) -> str:
     return f"{{{ITUNES}}}{tag}"
 
 
+def episode_description(ep) -> str:
+    """e.g. "cruftcast for Thursday, October 15, 2026. 8 items." """
+    if ep["status"] == "failed":
+        return f"{ep['title']}. The run failed; the run log is in the web panel."
+    count = ep["item_count"]
+    return f"{ep['title']}. {count} item{'s' if count != 1 else ''}."
+
+
 def build_rss(episodes, base_url: str) -> str:
     base = base_url.rstrip("/")
     rss = ET.Element("rss", version="2.0")
@@ -59,11 +67,7 @@ def build_rss(episodes, base_url: str) -> str:
         ET.SubElement(item, "guid", isPermaLink="false").text = ep["guid"]
         created = datetime.fromisoformat(ep["created_at"])
         ET.SubElement(item, "pubDate").text = format_datetime(created)
-        count = ep["item_count"]
-        ET.SubElement(item, "description").text = (
-            "Run failed." if ep["status"] == "failed"
-            else f"{count} item{'s' if count != 1 else ''}."
-        )
+        ET.SubElement(item, "description").text = episode_description(ep)
         ET.SubElement(item, "enclosure", url=f"{base}/episodes/{ep['filename']}",
                       length=str(ep["bytes"]), type="audio/mpeg")
         ET.SubElement(item, _it("duration")).text = str(ep["duration_s"])
