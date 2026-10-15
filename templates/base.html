@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block head %}{% endblock %}
+  <title>cruftcast{% block title_suffix %}{% endblock %}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; }
+    header { background: #16213e; padding: 0.75rem 2rem; display: flex; align-items: center; gap: 1.5rem; border-bottom: 1px solid #0f3460; }
+    header .logo { color: #fff; font-weight: 700; font-size: 1.3rem; text-decoration: none; letter-spacing: 0.02em; }
+    header nav a { color: #a0a0c0; text-decoration: none; margin-left: 1.5rem; font-size: 0.9rem; }
+    header nav a:hover { color: #fff; }
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem; }
+    h2 { font-size: 1.1rem; color: #a0a0c0; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.9rem; }
+    th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid #0f3460; color: #a0a0c0; font-weight: 600; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e2a4a; vertical-align: top; }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px; font-size: 0.75rem; }
+    .badge-ok { background: #1a4a2a; color: #80e0a0; }
+    .badge-fail { background: #4a1a1a; color: #e08080; }
+    .badge-run { background: #0f3460; color: #90b0e0; }
+    button, .btn { cursor: pointer; padding: 0.4rem 0.9rem; border-radius: 4px; border: none; font-size: 0.9rem; }
+    .btn-primary { background: #5865f2; color: #fff; }
+    .btn-primary:hover { background: #4752c4; }
+    .btn-primary:disabled { background: #333; color: #777; cursor: default; }
+    .panel { background: #16213e; border: 1px solid #0f3460; border-radius: 6px; padding: 1.25rem; margin-bottom: 2rem; }
+    .panel-title { font-size: 0.95rem; font-weight: 600; color: #c0c0e0; margin-bottom: 0.75rem; }
+    input[type=text], input[type=number], input[type=time], select, textarea { background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0; padding: 0.35rem 0.6rem; border-radius: 4px; font-size: 0.9rem; font-family: inherit; }
+    textarea { width: 100%; min-height: 4.5rem; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #5865f2; }
+    .row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.9rem; }
+    .field { margin-bottom: 0.9rem; }
+    label { font-size: 0.8rem; color: #a0a0c0; display: block; margin-bottom: 0.2rem; }
+    .hint { font-size: 0.78rem; color: #7080a0; margin-top: 0.2rem; }
+    .warn { color: #e0b060; font-size: 0.85rem; margin-top: 0.5rem; }
+    .error { color: #e08080; font-size: 0.85rem; margin-bottom: 0.4rem; }
+    .ok { color: #80e0a0; font-size: 0.85rem; margin-bottom: 1rem; }
+    .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
+    pre.log { background: #10101e; border: 1px solid #0f3460; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap; }
+    a { color: #7090d0; }
+    a:hover { color: #a0c0f0; }
+  </style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo">cruftcast</a>
+  <nav>
+    <a href="/">Episodes</a>
+    <a href="/settings">Settings</a>
+    <a href="/rss.xml">RSS</a>
+  </nav>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

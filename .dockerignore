@@ -1,0 +1,10 @@
+.env
+.venv
+.git
+.docker
+data
+tests
+__pycache__
+*.pyc
+.pytest_cache
+cruftcast-prompt.md

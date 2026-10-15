@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title_suffix %} · run {{ run.id }}{% endblock %}
+{% block content %}
+<h2>Run {{ run.id }} ({{ run.kind }}, {{ run.status }})</h2>
+<p class="hint">Started {{ run.started_at }}{% if run.finished_at %}, finished {{ run.finished_at }}{% endif %}</p>
+{% if run.error %}<p class="error">{{ run.error }}</p>{% endif %}
+<pre class="log">{{ run.log or "No log yet." }}</pre>
+{% endblock %}

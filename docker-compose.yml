@@ -1,0 +1,13 @@
+services:
+  cruftcast:
+    build: .
+    container_name: cruftcast
+    restart: unless-stopped
+    env_file: .env
+    user: "${CRUFTCAST_UID:-1000}:${CRUFTCAST_GID:-1000}"
+    environment:
+      - HOME=/tmp
+    ports:
+      - "${CRUFTCAST_PORT:-8091}:${CRUFTCAST_PORT:-8091}"
+    volumes:
+      - ./data:/app/data

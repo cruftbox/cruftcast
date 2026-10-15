@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block content %}
+{% if message %}<p class="ok">{{ message }}</p>{% endif %}
+
+<div class="panel">
+  <div class="panel-title">Generate</div>
+  <form method="post" action="/generate" class="row">
+    <button class="btn btn-primary" {% if running %}disabled{% endif %}>Generate now</button>
+    {% if running %}
+      <span class="badge badge-run">{{ status.kind }} run in progress: {{ status.stage }}</span>
+    {% else %}
+      <span class="hint">Makes an extra episode from the last 24 hours. The next scheduled episode is not affected.</span>
+    {% endif %}
+  </form>
+  <p class="hint">Scheduled daily at {{ settings.run_time }} {{ settings.timezone }}.
+    Podcast feed: <span class="mono">{{ feed_url }}</span></p>
+  {% if not has_artwork %}<p class="warn">No artwork yet. Put artwork.jpg or artwork.png in the data folder.</p>{% endif %}
+</div>
+
+<h2>Episodes</h2>
+<table>
+  <tr><th>Title</th><th>Items</th><th>Length</th><th>Size</th><th>Status</th></tr>
+  {% for ep in episodes %}
+  <tr>
+    <td><a href="/episodes/{{ ep.filename }}">{{ ep.title }}</a></td>
+    <td>{{ ep.item_count }}</td>
+    <td>{{ ep.duration_s // 60 }}:{{ "%02d" | format(ep.duration_s % 60) }}</td>
+    <td>{{ "%.1f" | format(ep.bytes / 1048576) }} MB</td>
+    <td>{% if ep.status == "ok" %}<span class="badge badge-ok">ok</span>{% else %}<span class="badge badge-fail">failed</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="hint">No episodes yet.</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Recent runs</h2>
+<table>
+  <tr><th>Started (UTC)</th><th>Kind</th><th>Status</th><th>Stage</th><th>Error</th></tr>
+  {% for r in runs %}
+  <tr>
+    <td><a href="/runs/{{ r.id }}">{{ r.started_at[:16] | replace("T", " ") }}</a></td>
+    <td>{{ r.kind }}</td>
+    <td>{% if r.status == "ok" %}<span class="badge badge-ok">ok</span>{% elif r.status == "running" %}<span class="badge badge-run">running</span>{% else %}<span class="badge badge-fail">failed</span>{% endif %}</td>
+    <td>{{ r.stage or "" }}</td>
+    <td>{{ r.error or "" }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="hint">No runs yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
