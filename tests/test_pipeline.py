@@ -79,9 +79,44 @@ def test_settings_form_validation():
     assert values["topic_exclusions"] == {"Tech News": ["Android news", "mobile phone news"]}
     assert values["category_priority"] == ["Weblog", "Tech News"]
 
-    form.update(run_time="25:00", topic_exclusions="no colon here", min_minutes="20")
+    form.update(pronunciations="Anthropic\nKubernetes = koo ber net eez\n")
+    values, errors = web.parse_settings_form(form)
+    assert errors == []
+    assert values["pronunciations"] == {"Anthropic": "", "Kubernetes": "koo ber net eez"}
+
+    form.update(run_time="25:00", topic_exclusions="no colon here", min_minutes="20",
+                pronunciations="= no word")
     _, errors = web.parse_settings_form(form)
-    assert len(errors) == 3
+    assert len(errors) == 4
+
+
+def test_fill_respellings_keeps_saved_and_asks_claude_for_new(monkeypatch):
+    asked = []
+
+    def fake_respell(word, settings, rejected=""):
+        asked.append(word)
+        if word == "Broken":
+            raise scriptwriter.ScriptError("API down")
+        return word.lower() + " respelled"
+
+    monkeypatch.setattr(scriptwriter, "respell_word", fake_respell)
+    filled, warnings = web.fill_respellings(
+        {"anthropic": "", "Nginx": "", "Kubernetes": "by hand", "Broken": ""},
+        {"Anthropic": "An thropic"}, db.DEFAULT_SETTINGS)
+    assert filled == {"anthropic": "An thropic", "Nginx": "nginx respelled",
+                      "Kubernetes": "by hand", "Broken": ""}
+    assert asked == ["Nginx", "Broken"]
+    assert len(warnings) == 1 and "Broken" in warnings[0]
+
+
+def test_respell_whole_words_case_insensitive():
+    p = {"Anthropic": "An-throp-ick", "Anthropic Claude": "An-throp-ick Clawd"}
+    assert synthesizer.respell("Anthropic's new model", p) == "An-throp-ick's new model"
+    assert synthesizer.respell("ANTHROPIC said", p) == "An-throp-ick said"
+    assert synthesizer.respell("Anthropic Claude ships", p) == "An-throp-ick Clawd ships"
+    assert synthesizer.respell("philanthropic giving", p) == "philanthropic giving"
+    assert synthesizer.respell("unchanged", {}) == "unchanged"
+    assert synthesizer.respell("Anthropic waits", {"Anthropic": ""}) == "Anthropic waits"
 
 
 # ── Full pipeline with Claude and edge-tts stubbed out ───────────────────────

@@ -90,6 +90,41 @@ def _call_json(settings: dict, system: str, user: str, schema: dict) -> dict:
         raise ScriptError(f"Claude returned invalid JSON: {exc}") from exc
 
 
+# ── Pronunciation ────────────────────────────────────────────────────────────
+
+RESPELL_SYSTEM = """\
+A neural text-to-speech voice (Microsoft Edge Read Aloud, US English) \
+mispronounces a word. Write a respelling of the word that the voice, reading \
+it as ordinary English text, will say the way the word is correctly \
+pronounced.
+
+Rules:
+- Use plain lowercase letters, with a capital only where the word itself starts with one.
+- Split the word into pieces with spaces where that helps; use as few pieces as possible.
+- No IPA, hyphens, accent marks, apostrophes, or capitals for stress.
+
+Example confirmed by listening: Anthropic -> An thropic"""
+
+RESPELL_SCHEMA = {
+    "type": "object",
+    "properties": {"respelling": {"type": "string"}},
+    "required": ["respelling"],
+    "additionalProperties": False,
+}
+
+
+def respell_word(word: str, settings: dict, rejected: str = "") -> str:
+    """Ask Claude for a spelling the voice reads correctly. Low effort; it is one word."""
+    user = f"Word: {word}"
+    if rejected:
+        user += f"\nThe respelling {rejected!r} still sounded wrong. Give a different one."
+    result = _call_json({**settings, "effort": "low"}, RESPELL_SYSTEM, user, RESPELL_SCHEMA)
+    respelling = result["respelling"].strip()
+    if not respelling:
+        raise ScriptError(f"Claude returned an empty respelling for {word!r}")
+    return respelling
+
+
 # ── Budget ───────────────────────────────────────────────────────────────────
 
 def word_budget(settings: dict) -> tuple[int, int]:

@@ -3,6 +3,7 @@
 {% block content %}
 {% if saved %}<p class="ok">Settings saved.</p>{% endif %}
 {% for e in errors %}<p class="error">{{ e }}</p>{% endfor %}
+{% for w in warnings %}<p class="warn">{{ w }}</p>{% endfor %}
 
 <form method="post">
 <div class="panel">
@@ -61,6 +62,22 @@
     <div><label><input type="checkbox" name="chime" {% if s.chime %}checked{% endif %}> Chime between stories</label></div>
     <div><label>Pause around the chime and before the sign-off (ms)</label><input type="number" name="gap_ms" value="{{ s.gap_ms }}" min="0" max="3000"></div>
   </div>
+  <div class="field" id="pronunciations"><label>Words the voice mispronounces (one per line)</label>
+    <textarea name="pronunciations">{{ s.pronunciations | join("\n") }}</textarea>
+    <p class="hint">On save, Claude writes a respelling for each new word, and the voice reads it in place of the word; scripts and show notes keep the real spelling. Whole words only, case ignored. To set a respelling by hand, write "word = respelling"; to remove a word, delete its line.</p></div>
+  {% if s.pronunciations %}
+  <table>
+    <tr><th>Word</th><th>Spoken as</th><th>Listen</th><th></th></tr>
+    {% for word, spoken in s.pronunciations.items() %}
+    <tr>
+      <td>{{ word }}</td>
+      <td class="mono">{{ spoken or "(none yet; save again to retry)" }}</td>
+      <td><audio controls preload="none" src="{{ url_for('preview_pronunciation', word=word) }}"></audio></td>
+      <td>{% if spoken %}<button class="btn" formaction="{{ url_for('retry_pronunciation') }}" formmethod="post" formnovalidate name="word" value="{{ word }}">Retry</button>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
   <p class="hint">To use your own chime, put chime.mp3 in the data folder.</p>
 </div>
 

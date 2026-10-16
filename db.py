@@ -33,6 +33,7 @@ DEFAULT_SETTINGS: dict = {
     "voice": "en-US-AvaNeural",
     "rate": "+0%",
     "pitch": "+0Hz",
+    "pronunciations": {},
     "chime": True,
     "gap_ms": 400,
     "retention_days": 14,

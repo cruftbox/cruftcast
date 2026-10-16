@@ -16,6 +16,7 @@ purpose: it depends on audioop, which Python 3.13 removed.
 
 import asyncio
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -39,6 +40,20 @@ class SynthesisError(Exception):
 
 def _voice(settings: dict) -> dict:
     return {"voice": settings["voice"], "rate": settings["rate"], "pitch": settings["pitch"]}
+
+
+def respell(text: str, pronunciations: dict) -> str:
+    """
+    Replace whole words the voice mispronounces with spellings it reads
+    correctly. edge-tts escapes its input, so SSML phoneme tags are not an
+    option. Matching ignores case; longer entries win over shorter ones.
+    """
+    words = sorted((w for w, spoken in pronunciations.items() if spoken), key=len, reverse=True)
+    if not words:
+        return text
+    lookup = {w.lower(): pronunciations[w] for w in words}
+    pattern = re.compile(r"\b(" + "|".join(re.escape(w) for w in words) + r")\b", re.IGNORECASE)
+    return pattern.sub(lambda m: lookup[m.group(0).lower()], text)
 
 
 def chime_source() -> Path:
@@ -72,6 +87,7 @@ async def _speak_all(texts: list[str], settings: dict, workdir: Path) -> list[Pa
         async with sem:
             await _speak(text, voice, path)
 
+    texts = [respell(t, settings["pronunciations"]) for t in texts]
     await asyncio.gather(*(one(t, p) for t, p in zip(texts, paths)))
     return paths
 
@@ -153,4 +169,4 @@ def synthesize(opening: str, stories: list[str], sign_off: str, settings: dict, 
 
 def speak_once(text: str, settings: dict, out: Path):
     """A single clip; used for failure and no-news episodes."""
-    asyncio.run(_speak(text, _voice(settings), out))
+    asyncio.run(_speak(respell(text, settings["pronunciations"]), _voice(settings), out))

@@ -5,7 +5,9 @@ LAN and tailnet only; no authentication, by design (same as wireburst).
 
 import logging
 import re
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, Response, abort, redirect, render_template, request, send_from_directory, url_for
@@ -13,6 +15,8 @@ from flask import Flask, Response, abort, redirect, render_template, request, se
 import db
 import feed_generator
 import pipeline
+import scriptwriter
+import synthesizer
 
 log = logging.getLogger("cruftcast.web")
 
@@ -135,6 +139,16 @@ def parse_settings_form(form) -> tuple[dict, list[str]]:
         exclusions.setdefault(category.strip(), []).append(topic.strip())
     values["topic_exclusions"] = exclusions
 
+    # "word" alone gets a respelling from Claude on save; "word = respelling" sets one by hand.
+    pronunciations: dict[str, str] = {}
+    for line in _lines(form.get("pronunciations", "")):
+        word, _, spoken = line.partition("=")
+        if not word.strip():
+            errors.append(f"Pronunciation lines must start with a word (got {line!r}).")
+            continue
+        pronunciations[word.strip()] = spoken.strip()
+    values["pronunciations"] = pronunciations
+
     for name in TEXT_FIELDS:
         values[name] = form.get(name, "").strip()
     values["chime"] = form.get("chime") == "on"
@@ -152,9 +166,29 @@ def parse_settings_form(form) -> tuple[dict, list[str]]:
     return values, errors
 
 
+def fill_respellings(new: dict[str, str], old: dict[str, str], settings: dict) -> tuple[dict, list[str]]:
+    """
+    Give every word without a respelling one: the saved one if the word was
+    already listed, else Claude's. A Claude failure leaves the word blank
+    (spoken as before) and returns a warning instead of blocking the save.
+    """
+    old_by_lower = {w.lower(): spoken for w, spoken in old.items()}
+    filled, warnings = {}, []
+    for word, spoken in new.items():
+        spoken = spoken or old_by_lower.get(word.lower(), "")
+        if not spoken:
+            try:
+                spoken = scriptwriter.respell_word(word, settings)
+            except scriptwriter.ScriptError as exc:
+                warnings.append(f"No respelling for {word!r} yet: {exc}")
+        filled[word] = spoken
+    return filled, warnings
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     errors: list[str] = []
+    warnings: list[str] = []
     saved = False
     with db.get_conn() as conn:
         settings = db.get_settings(conn)
@@ -163,16 +197,58 @@ def settings_page():
         if errors:
             settings.update(values)  # redisplay what was typed
         else:
+            values["pronunciations"], warnings = fill_respellings(
+                values["pronunciations"], settings["pronunciations"], {**settings, **values})
             with db.get_conn() as conn:
                 db.save_settings(conn, values)
                 settings = db.get_settings(conn)
             saved = True
+    if request.args.get("error"):
+        warnings.append(request.args["error"])
     exclusion_text = "\n".join(f"{cat}: {topic}" for cat, topics in settings["topic_exclusions"].items()
                                for topic in topics)
     now_local = datetime.now(ZoneInfo(settings["timezone"])) if not errors else None
-    return render_template("settings.html", s=settings, errors=errors, saved=saved,
+    return render_template("settings.html", s=settings, errors=errors, warnings=warnings, saved=saved,
                            exclusion_text=exclusion_text, voices=VOICES,
                            efforts=EFFORTS, now_local=now_local)
+
+
+@app.route("/pronunciations/retry", methods=["POST"])
+def retry_pronunciation():
+    """Replace one word's respelling with a different one from Claude."""
+    word = request.form.get("word", "")
+    with db.get_conn() as conn:
+        settings = db.get_settings(conn)
+    pronunciations = dict(settings["pronunciations"])
+    if word not in pronunciations:
+        abort(404)
+    try:
+        pronunciations[word] = scriptwriter.respell_word(word, settings, rejected=pronunciations[word])
+    except scriptwriter.ScriptError as exc:
+        return redirect(url_for("settings_page", error=f"Retry for {word!r} failed: {exc}") + "#pronunciations")
+    with db.get_conn() as conn:
+        db.save_settings(conn, {"pronunciations": pronunciations})
+    return redirect(url_for("settings_page") + "#pronunciations")
+
+
+PREVIEW_TEXT = "{w}. Today, {w} made the news, and {w}'s announcement was widely read."
+
+
+@app.route("/pronunciations/preview.mp3")
+def preview_pronunciation():
+    """The word in a short sentence, in the current voice with respellings applied."""
+    word = request.args.get("word", "").strip()
+    if not word:
+        abort(400)
+    with db.get_conn() as conn:
+        settings = db.get_settings(conn)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "preview.mp3"
+        try:
+            synthesizer.speak_once(PREVIEW_TEXT.format(w=word), settings, out)
+        except synthesizer.SynthesisError as exc:
+            return Response(str(exc), status=502, mimetype="text/plain")
+        return Response(out.read_bytes(), mimetype="audio/mpeg")
 
 
 # ── Feed and files ───────────────────────────────────────────────────────────
