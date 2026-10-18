@@ -1,6 +1,6 @@
 # cruftcast
 
-cruftcast turns a set of RSS feeds into a private daily podcast. Every morning it reads the feeds, has Claude choose the stories and write a script about them, reads it in one of Microsoft's neural voices through [edge-tts](https://github.com/rany2/edge-tts), and publishes the episode to a podcast RSS feed served from the same container.
+cruftcast turns a set of RSS feeds into a private daily podcast. Every morning it reads the feeds, has Claude choose the stories and write a script about them, reads it in one of Microsoft's neural voices through [edge-tts](https://github.com/rany2/edge-tts), and publishes the episode to a podcast RSS feed. The feed is served from the same container, uploaded to a web server over SFTP, or both.
 
 It is built to run on a low-power NAS: no AI model runs locally. Claude does the writing over the Anthropic API, and edge-tts does the voices over the network. The NAS only fetches feeds, calls ffmpeg to join audio files, and serves files.
 
@@ -16,8 +16,8 @@ The feed list comes from the OPML export of [wireburst](https://github.com/cruft
 4. **Selection (Claude).** Claude sees the title and a short excerpt of every candidate and picks the stories: higher-priority categories first, topic exclusions applied per category, duplicate coverage of one story merged into one segment, and no more stories than fit the target length.
 5. **Articles.** For the chosen stories only, feeds that carry the full post are used as they are. Short feed text (link posts, teasers) gets the linked page fetched with trafilatura; the blogger's own words are kept in front of the article. If a fetch fails or hits a paywall, the feed text is used.
 6. **Script (Claude).** Claude writes one self-contained section per story, plus a sign-off. The opening line ("This is cruftcast for Thursday, October 15. There are 7 items today.") is added by code.
-7. **Voice.** One edge-tts request per section, retried with backoff. ffmpeg joins the clips without re-encoding, with a chime before each story. The bundled chime (`assets/chime.mp3`, made by `tools/render_chime.sh`) is replaced by `chime.mp3` in the data folder if you put one there.
-8. **Publish.** The episode is added to the feed and episodes older than the retention period are deleted.
+7. **Voice.** Words on the pronunciation list are swapped for their respellings, then each section goes to edge-tts as one request, retried with backoff. ffmpeg joins the clips without re-encoding, with a chime before each story. The bundled chime (`assets/chime.mp3`, made by `tools/render_chime.sh`) is replaced by `chime.mp3` in the data folder if you put one there.
+8. **Publish.** The episode is added to the feed and episodes older than the retention period are deleted. With web hosting on, the web server is then synced to match.
 
 On a slow day the episode is shorter; nothing is padded. With no new items at all, a short "no new items today" episode is published.
 
@@ -38,7 +38,7 @@ edge-tts is an unofficial client for the Read Aloud service in Microsoft Edge, n
 - Docker with Docker Compose (on a QNAP: Container Station)
 - An Anthropic API key
 - An OPML URL listing the feeds, with categories as OPML folders (wireburst's `/opml/export` works)
-- A way for your phone to reach the server (same LAN, or Tailscale)
+- A way for your phone to reach the feed: the same LAN or Tailscale for the local feed, or a web host with SFTP for a public one
 
 ---
 
@@ -129,8 +129,9 @@ It pulls, rebuilds the image, restarts the container, and waits for the health c
 
 The web panel is at `http://<server>:8091`.
 
-- **Episodes**: every episode in the feed, playable in the browser, plus recent runs with their status and full log.
+- **Episodes**: every episode in the feed, playable in the browser (from the web copy when local hosting is off), plus recent runs with their status and full log.
 - **Generate now**: makes an extra episode from the last 24 hours, titled "(extra)". The page refreshes while it runs.
+- **Web server** (shown when web hosting is on): the result of the last sync and a **Sync now** button.
 - **Settings**: every setting below. Changes apply to the next run; the scheduler picks up a new run time within 30 seconds.
 
 > ⚠️ **Security note:** the web panel has no authentication, and anyone who can reach it can change settings and start runs (which cost API credits). Keep it on a trusted LAN or tailnet.
