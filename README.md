@@ -60,6 +60,7 @@ Edit `.env`:
 | `CRUFTCAST_PORT` | Port for the web panel, feed, and MP3s. Default `8091`. |
 | `CRUFTCAST_OPML_URL` | Initial OPML URL. After first start this is a setting in the web panel. |
 | `CRUFTCAST_PUBLIC_URL` | Initial public base URL: the address your phone uses to reach this server, e.g. `http://your-nas:8091`. Episode links in the feed are built from it. After first start this is a setting in the web panel. |
+| `CRUFTCAST_SFTP_PASSWORD` | Password for publishing to a web server over SFTP. Only needed when web hosting is on; see [Publishing to a web server](#5-publishing-to-a-web-server-optional). It lives here rather than in the settings because the web panel has no login. |
 | `CRUFTCAST_UID`, `CRUFTCAST_GID` | Owner for files in `./data`. Use `id -u` and `id -g` on the host so you can manage the folder over SMB. |
 
 The OPML URL is fetched from **inside the container**. A hostname that works on your desktop may not resolve there, and on some hosts (QNAP Container Station among them) a container cannot connect to ports published on the host at all. If wireburst runs on the same Docker host, join its network and use the container name instead. Put this in `docker-compose.override.yml` (gitignored; Compose loads it automatically) and set the OPML URL to `http://wireburst:8082/opml/export`:
@@ -89,6 +90,24 @@ Open `http://<server>:8091`. On first start the scheduler checks whether today's
 ### 4. Subscribe
 
 Add `http://<server>:8091/rss.xml` to your podcast app as a feed URL. The app has to fetch the feed itself rather than through its own servers, because a private address is not reachable from the internet. Downcast on iOS fetches feeds on the device.
+
+To listen from anywhere without a VPN or tailnet, publish to a web server as well (or instead) and subscribe to that feed.
+
+### 5. Publishing to a web server (optional)
+
+cruftcast can upload the feed and episodes to any web host that offers SFTP. In **Settings → Hosting**, turn on *Publish to a web server over SFTP* and fill in:
+
+- **Web base URL**: the public address of the remote folder, e.g. `https://example.com/cruftcast`. Every link in the uploaded feed is built from it.
+- **SFTP host, port, username, remote folder**: where to upload. The folder is created if it is missing.
+- The password goes in `.env` as `CRUFTCAST_SFTP_PASSWORD`; then recreate the container (`docker compose up -d` or `./update.sh`), since `docker restart` does not re-read `.env`.
+
+Use an account that can only reach the podcast folder, not one that can write to the whole site.
+
+Each sync makes the remote folder match the feed: it uploads missing MP3s (under `episodes/`) and the artwork, then `rss.xml`, then deletes episodes that retention has dropped. Only files named `cruftcast-*.mp3` are ever deleted. Uploads go to a temporary name and are renamed into place, so a podcast app never sees a half-written file or a feed entry whose MP3 isn't there yet.
+
+A sync runs after every new episode, when web settings are saved, and from **Sync now** on the dashboard. A failed upload doesn't fail the episode. It is retried twice, shown on the dashboard, and repaired by the next sync. The server's host key is pinned on the first connection; if it ever changes, syncing stops until you clear the key field in settings.
+
+With *Serve the podcast from this machine* turned off, the local `/rss.xml`, MP3 and artwork URLs return 404 and the dashboard links episodes to the web copy. At least one of the two has to be on. Your web host should serve `.mp3` as `audio/mpeg` and support byte-range requests; most do.
 
 ---
 
@@ -127,10 +146,13 @@ The web panel is at `http://<server>:8091`.
 | Excluded categories, excluded feed URLs | | Dropped before anything else happens. |
 | Article characters per story | 6000 | Long posts are cut to this length before going to Claude. |
 | Voice, rate, pitch | en-US-AvaNeural, +0%, +0Hz | Any edge-tts voice name works. |
+| Words the voice mispronounces | | One word per line. On save, Claude writes a respelling for each new word (e.g. Anthropic → "An thropic"), and the voice reads the respelling in its place; scripts and show notes keep the real spelling. Each word has a Listen preview and a Retry button. Write `word = respelling` to set one by hand. edge-tts escapes its input, so SSML phoneme tags are not an option. |
 | Chime between stories | on | |
 | Pause around the chime and before the sign-off | 400 ms | |
 | Model, effort | claude-opus-5-5, high | Both Claude calls use these. |
-| OPML URL, public base URL | from `.env` | |
+| OPML URL, local base URL | from `.env` | The local base URL is what the phone uses to reach this server. |
+| Serve the podcast from this machine | on | |
+| Publish to a web server over SFTP | off | Web base URL, SFTP host, port, username, remote folder, host key. See [Publishing to a web server](#5-publishing-to-a-web-server-optional). |
 | Keep episodes (days) | 14 | Older MP3s are deleted and drop out of the feed. |
 
 ---
@@ -142,8 +164,9 @@ The web panel is at `http://<server>:8091`.
 | `main.py` | Entrypoint: database setup, scheduler thread, web server (waitress). |
 | `pipeline.py` | One run end to end, run logging, failure episodes. |
 | `ingest.py` | OPML, feed polling, window, weblog cap, article fetching. |
-| `scriptwriter.py` | The two Claude calls (selection and script). |
+| `scriptwriter.py` | The Claude calls: selection, script, and pronunciation respellings. |
 | `synthesizer.py` | edge-tts and ffmpeg. |
+| `publisher.py` | Web hosting: syncs the feed, MP3s and artwork to a web server over SFTP. |
 | `feed_generator.py` | The RSS feed (built per request from the database) and retention. |
 | `scheduler.py` | The daily trigger. |
 | `web.py`, `templates/` | The web panel. |
@@ -163,7 +186,7 @@ python -m venv .venv
 .venv/Scripts/python -m pytest
 ```
 
-The tests stub out Claude and edge-tts. The ffmpeg test is skipped when ffmpeg isn't installed; run the suite in the container to include it:
+The tests stub out Claude, edge-tts and the SFTP server. The ffmpeg test is skipped when ffmpeg isn't installed; run the suite in the container to include it:
 
 ```bash
 docker build -t cruftcast:dev .

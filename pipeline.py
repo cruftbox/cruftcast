@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 import db
 import feed_generator
 import ingest
+import publisher
 import scriptwriter
 import synthesizer
 
@@ -172,10 +173,12 @@ def _run(kind: str) -> int:
                 db.mark_used(conn, [c.key for s in segments for c in s.items], episode_id)
         feed_generator.apply_retention(settings["retention_days"])
         log.info("Published %s", out.name)
+        _sync_web()
         _finish(run_id, handler, "ok", episode_id=episode_id)
     except Exception as exc:
         log.exception("Run failed during %s", stage)
         episode_id = _publish_failure(stage, exc, settings, local, kind, stem, now)
+        _sync_web()
         _finish(run_id, handler, "failed", error=f"{type(exc).__name__}: {exc}",
                 episode_id=episode_id)
     finally:
@@ -183,6 +186,19 @@ def _run(kind: str) -> int:
         for leftover in db.EPISODES_DIR.glob("*.part.mp3"):
             leftover.unlink(missing_ok=True)
     return run_id
+
+
+def _sync_web():
+    """
+    Upload to the web server when web hosting is on. The episode is already
+    published locally, so a failed upload is logged, shown on the dashboard
+    and repaired by the next sync, but does not fail the run.
+    """
+    status["stage"] = "web upload"
+    try:
+        publisher.sync("new episode")
+    except Exception:
+        log.exception("Web sync crashed")
 
 
 def _finish(run_id: int, handler: _RunLog, status_: str, **fields):

@@ -42,6 +42,15 @@ DEFAULT_SETTINGS: dict = {
     "effort": "high",
     "opml_url": os.getenv("CRUFTCAST_OPML_URL", ""),
     "public_base_url": os.getenv("CRUFTCAST_PUBLIC_URL", "http://localhost:8091"),
+    # Hosting: this machine, a web server over SFTP, or both.
+    "local_hosting": True,
+    "web_hosting": False,
+    "web_base_url": "",
+    "sftp_host": "",
+    "sftp_port": 22,
+    "sftp_user": "",
+    "sftp_path": "/",
+    "sftp_host_key": "",
 }
 
 
@@ -100,6 +109,12 @@ def init_db():
                 UNIQUE(feed_url, guid)
             );
 
+            -- Small app state that is not a setting, e.g. the last web sync.
+            CREATE TABLE IF NOT EXISTS state (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS runs (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 kind       TEXT NOT NULL,              -- scheduled | adhoc
@@ -140,6 +155,19 @@ def save_settings(conn, values: dict):
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, json.dumps(value)),
         )
+
+
+def get_state(conn, key: str, default=None):
+    row = conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
+
+
+def set_state(conn, key: str, value):
+    conn.execute(
+        "INSERT INTO state (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, json.dumps(value)),
+    )
 
 
 def seed_settings():

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block head %}{% if running %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block head %}{% if running or syncing %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block content %}
 {% if message %}<p class="ok">{{ message }}</p>{% endif %}
 
@@ -13,17 +13,35 @@
       <span class="hint">Makes an extra episode from the last 24 hours. The next scheduled episode is not affected.</span>
     {% endif %}
   </form>
-  <p class="hint">Scheduled daily at {{ settings.run_time }} {{ settings.timezone }}.
-    Podcast feed: <span class="mono">{{ feed_url }}</span></p>
+  <p class="hint">Scheduled daily at {{ settings.run_time }} {{ settings.timezone }}.</p>
+  {% for label, url in feeds %}<p class="hint">{{ label }} podcast feed: <span class="mono">{{ url }}</span></p>{% endfor %}
   {% if not has_artwork %}<p class="warn">No artwork yet. Put artwork.jpg or artwork.png in the data folder.</p>{% endif %}
 </div>
+
+{% if settings.web_hosting %}
+<div class="panel">
+  <div class="panel-title">Web server</div>
+  <form method="post" action="/sync" class="row">
+    <button class="btn btn-primary" {% if syncing %}disabled{% endif %}>Sync now</button>
+    {% if syncing %}
+      <span class="badge badge-run">sync in progress</span>
+    {% elif web_sync %}
+      <span class="badge {{ 'badge-ok' if web_sync.ok else 'badge-fail' }}">{{ "ok" if web_sync.ok else "failed" }}</span>
+      <span class="hint">Last sync {{ web_sync.at[:16] | replace("T", " ") }} UTC: {{ web_sync.message }}</span>
+    {% else %}
+      <span class="hint">Not synced yet.</span>
+    {% endif %}
+  </form>
+  <p class="hint">Each new episode is uploaded to {{ settings.sftp_host }} after it is made. A failed upload is retried on the next sync.</p>
+</div>
+{% endif %}
 
 <h2>Episodes</h2>
 <table>
   <tr><th>Title</th><th>Items</th><th>Length</th><th>Size</th><th>Status</th></tr>
   {% for ep in episodes %}
   <tr>
-    <td><a href="/episodes/{{ ep.filename }}">{{ ep.title }}</a></td>
+    <td><a href="{{ episode_base }}/{{ ep.filename }}">{{ ep.title }}</a></td>
     <td>{{ ep.item_count }}</td>
     <td>{{ ep.duration_s // 60 }}:{{ "%02d" | format(ep.duration_s % 60) }}</td>
     <td>{{ "%.1f" | format(ep.bytes / 1048576) }} MB</td>

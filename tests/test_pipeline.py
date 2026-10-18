@@ -73,7 +73,8 @@ def test_settings_form_validation():
     form = {k: str(v) for k, v in form.items()}
     form.update(category_priority="Weblog\nTech News\n", excluded_categories="Personal",
                 excluded_feeds="", topic_exclusions="Tech News: Android news\nTech News: mobile phone news",
-                opml_url="http://nas:8082/opml/export", public_base_url="http://nas:8091")
+                opml_url="http://nas:8082/opml/export", public_base_url="http://nas:8091",
+                local_hosting="on")
     values, errors = web.parse_settings_form(form)
     assert errors == []
     assert values["topic_exclusions"] == {"Tech News": ["Android news", "mobile phone news"]}
@@ -88,6 +89,33 @@ def test_settings_form_validation():
                 pronunciations="= no word")
     _, errors = web.parse_settings_form(form)
     assert len(errors) == 4
+
+
+def test_hosting_validation():
+    form = {k: str(v) for k, v in db.DEFAULT_SETTINGS.items() if isinstance(v, (str, int))}
+    form.update(opml_url="http://nas:8082/opml/export", public_base_url="http://nas:8091")
+    _, errors = web.parse_settings_form(form)  # both hosting boxes unchecked
+    assert errors == ["Turn on at least one of local hosting and web server hosting."]
+
+    form.update(web_hosting="on")
+    _, errors = web.parse_settings_form(form)
+    assert len(errors) == 2  # no web base URL, no host or user
+
+    form.update(web_base_url="https://example.com/cruftcast", sftp_host="example.com",
+                sftp_user="cruftcast", sftp_port="24", sftp_path="")
+    values, errors = web.parse_settings_form(form)
+    assert errors == []
+    assert values["sftp_port"] == 24 and values["sftp_path"] == "/"
+    assert values["web_hosting"] and not values["local_hosting"]
+
+
+def test_local_routes_off_when_local_hosting_off(data_dir):
+    client = web.app.test_client()
+    assert client.get("/rss.xml").status_code == 200
+    with db.get_conn() as conn:
+        db.save_settings(conn, {"local_hosting": False, "web_hosting": True})
+    assert client.get("/rss.xml").status_code == 404
+    assert client.get("/episodes/anything.mp3").status_code == 404
 
 
 def test_fill_respellings_keeps_saved_and_asks_claude_for_new(monkeypatch):
