@@ -10,7 +10,7 @@ The feed list comes from the OPML export of [wireburst](https://github.com/cruft
 
 ## How an episode is made
 
-1. **Feeds.** Fetch the OPML (falling back to the last good copy if it can't be reached), drop excluded categories and feeds, and poll every feed in parallel.
+1. **Feeds.** Fetch the OPML from its URL (falling back to the last good copy if it can't be reached), or read the uploaded OPML file when no URL is set. Drop excluded categories and feeds, and poll every feed in parallel.
 2. **Window.** A scheduled episode covers everything published since the previous scheduled episode, minus anything already used. A **Generate now** episode covers the last 24 hours and does not affect the next scheduled one.
 3. **Weblog cap.** Each feed in the weblog category contributes at most N items (newest first). The script mentions when a blog posted more.
 4. **Selection (Claude).** Claude sees the title and a short excerpt of every candidate and picks the stories: higher-priority categories first, topic exclusions applied per category, duplicate coverage of one story merged into one segment, and no more stories than fit the target length.
@@ -37,7 +37,7 @@ edge-tts is an unofficial client for the Read Aloud service in Microsoft Edge, n
 
 - Docker with Docker Compose (on a QNAP: Container Station)
 - An Anthropic API key
-- An OPML URL listing the feeds, with categories as OPML folders (wireburst's `/opml/export` works)
+- An OPML URL or an OPML file listing the feeds, with categories as OPML folders (wireburst's `/opml/export` works as a URL)
 - A way for your phone to reach the feed: the same LAN or Tailscale for the local feed, or a web host with SFTP for a public one
 
 ---
@@ -58,7 +58,7 @@ Edit `.env`:
 |---|---|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key. Without it the app runs, but every run fails at the script stage. |
 | `CRUFTCAST_PORT` | Port for the web panel, feed, and MP3s. Default `8091`. |
-| `CRUFTCAST_OPML_URL` | Initial OPML URL. After first start this is a setting in the web panel. |
+| `CRUFTCAST_OPML_URL` | Initial OPML URL. After first start this is a setting in the web panel. Leave it blank if you will upload an OPML file instead. |
 | `CRUFTCAST_PUBLIC_URL` | Initial public base URL: the address your phone uses to reach this server, e.g. `http://your-nas:8091`. Episode links in the feed are built from it. After first start this is a setting in the web panel. |
 | `CRUFTCAST_SFTP_PASSWORD` | Password for publishing to a web server over SFTP. Only needed when web hosting is on; see [Publishing to a web server](#5-publishing-to-a-web-server-optional). It lives here rather than in the settings because the web panel has no login. |
 | `CRUFTCAST_UID`, `CRUFTCAST_GID` | Owner for files in `./data`. Use `id -u` and `id -g` on the host so you can manage the folder over SMB. |
@@ -86,6 +86,8 @@ docker compose up -d
 ```
 
 Open `http://<server>:8091`. On first start the scheduler checks whether today's episode is due. **If it is already past the run time, the first episode is made right away.**
+
+Without an OPML URL, upload your feed list in **Settings → Feeds** before the first run (most feed readers can export OPML). The file is checked when you upload it; one that doesn't parse or lists no feeds is rejected. It stays the feed list until you upload another. If you later set an OPML URL, the next run downloads from it and replaces the uploaded file.
 
 ### 4. Subscribe
 
@@ -151,7 +153,8 @@ The web panel is at `http://<server>:8091`.
 | Chime between stories | on | |
 | Pause around the chime and before the sign-off | 400 ms | |
 | Model, effort | claude-opus-5-5, high | Both Claude calls use these. |
-| OPML URL, local base URL | from `.env` | The local base URL is what the phone uses to reach this server. |
+| OPML URL, local base URL | from `.env` | The local base URL is what the phone uses to reach this server. A blank OPML URL means the uploaded file is used. |
+| OPML file upload | | Sets the feed list for setups with no OPML URL. Files up to 2 MB; only one level of folders is read. The panel shows where the current list came from, its feed count, and its categories. |
 | Serve the podcast from this machine | on | |
 | Publish to a web server over SFTP | off | Web base URL, SFTP host, port, username, remote folder, host key. See [Publishing to a web server](#5-publishing-to-a-web-server-optional). |
 | Keep episodes (days) | 14 | Older MP3s are deleted and drop out of the feed. |

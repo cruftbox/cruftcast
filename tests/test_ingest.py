@@ -51,6 +51,43 @@ def test_load_feeds_without_cache_raises(data_dir, monkeypatch):
         ingest.load_feeds(dict(db.DEFAULT_SETTINGS, opml_url="http://nas/opml"))
 
 
+def test_save_feed_list_rejects_bad_files_and_keeps_the_old_one(data_dir):
+    ingest.save_feed_list(OPML, "upload", "mine.opml")
+    for bad in (b"not xml at all", b"<opml><head/></opml>",
+                b"<opml><body><outline text='Empty folder'/></body></opml>"):
+        with pytest.raises(ValueError):
+            ingest.save_feed_list(bad, "upload", "bad.opml")
+    assert ingest.feed_list_path().read_bytes() == OPML
+    summary = ingest.feed_list_summary()
+    assert summary["source"] == "upload" and summary["name"] == "mine.opml"
+    assert summary["count"] == 4
+    assert summary["categories"] == {"Weblog": 2, "Personal": 1, "Tech News": 1}
+
+
+def test_load_feeds_without_url_reads_upload_offline(data_dir, monkeypatch):
+    def no_network(*a, **k): raise AssertionError("no fetch expected")
+    monkeypatch.setattr(ingest.urllib.request, "urlopen", no_network)
+    with pytest.raises(ingest.IngestError, match="upload an OPML file"):
+        ingest.load_feeds(dict(db.DEFAULT_SETTINGS, opml_url=""))
+    ingest.save_feed_list(OPML, "upload", "mine.opml")
+    feeds = ingest.load_feeds(dict(db.DEFAULT_SETTINGS, opml_url=""))
+    assert [f.title for f in feeds] == ["Blog A", "Tech"]
+
+
+def test_url_download_replaces_upload(data_dir, monkeypatch):
+    ingest.save_feed_list(b"<opml><body><outline xmlUrl='https://u/feed' text='U'/></body></opml>",
+                          "upload", "mine.opml")
+
+    class Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return OPML
+    monkeypatch.setattr(ingest.urllib.request, "urlopen", lambda *a, **k: Resp())
+    ingest.load_feeds(dict(db.DEFAULT_SETTINGS, opml_url="http://nas/opml"))
+    assert ingest.feed_list_path().read_bytes() == OPML
+    assert ingest.feed_list_summary()["source"] == "url"
+
+
 def test_weblog_cap_keeps_newest_and_counts_extras():
     cands = [_cand(0, "a", "Weblog", 5), _cand(1, "a", "Weblog", 1), _cand(2, "a", "Weblog", 3),
              _cand(3, "t", "Tech News", 2), _cand(4, "t", "Tech News", 4)]

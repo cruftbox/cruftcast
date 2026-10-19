@@ -15,6 +15,7 @@ from flask import Flask, Response, abort, redirect, render_template, request, se
 
 import db
 import feed_generator
+import ingest
 import pipeline
 import publisher
 import scriptwriter
@@ -23,6 +24,7 @@ import synthesizer
 log = logging.getLogger("cruftcast.web")
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # caps OPML uploads; every form is far smaller
 
 # The voice dropdown: American edge-tts voices with lively or conversational
 # tags (labels are Microsoft's own descriptions). Left out on purpose: the
@@ -193,9 +195,11 @@ def parse_settings_form(form) -> tuple[dict, list[str]]:
         errors.append("Pitch must look like +0Hz or -5Hz.")
     if values["effort"] not in EFFORTS:
         errors.append(f"Effort must be one of {', '.join(EFFORTS)}.")
-    for name, label in (("opml_url", "OPML URL"), ("public_base_url", "Public base URL")):
-        if not values[name].startswith(("http://", "https://")):
-            errors.append(f"{label} must start with http:// or https://.")
+    # A blank OPML URL means the uploaded feed list is used.
+    if values["opml_url"] and not values["opml_url"].startswith(("http://", "https://")):
+        errors.append("OPML URL must start with http:// or https://, or be left blank to use an uploaded file.")
+    if not values["public_base_url"].startswith(("http://", "https://")):
+        errors.append("Public base URL must start with http:// or https://.")
     return values, errors
 
 
@@ -256,7 +260,27 @@ def settings_page():
     now_local = datetime.now(ZoneInfo(settings["timezone"])) if not errors else None
     return render_template("settings.html", s=settings, errors=errors, warnings=warnings, saved=saved,
                            exclusion_text=exclusion_text, voices=VOICES,
-                           efforts=EFFORTS, now_local=now_local)
+                           efforts=EFFORTS, now_local=now_local,
+                           feed_list=ingest.feed_list_summary(), notice=request.args.get("notice"))
+
+
+@app.route("/opml/upload", methods=["POST"])
+def upload_opml():
+    """Store an uploaded OPML file as the feed list, for setups with no OPML URL."""
+    file = request.files.get("opml")
+    if not file or not file.filename:
+        return redirect(url_for("settings_page", error="Choose an OPML file to upload.") + "#feeds")
+    try:
+        feeds = ingest.save_feed_list(file.read(), "upload", file.filename)
+    except ValueError as exc:
+        return redirect(url_for("settings_page", error=f"{file.filename} was not used: {exc}.") + "#feeds")
+    return redirect(url_for("settings_page", notice=f"Uploaded {file.filename}: {len(feeds)} feeds.") + "#feeds")
+
+
+@app.errorhandler(413)
+def too_large(_exc):
+    limit = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
+    return redirect(url_for("settings_page", error=f"That file is larger than {limit} MB.") + "#feeds")
 
 
 @app.route("/pronunciations/retry", methods=["POST"])

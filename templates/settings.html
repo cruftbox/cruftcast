@@ -89,9 +89,25 @@
   </div>
 </div>
 
-<div class="panel">
+<div class="panel" id="feeds">
   <div class="panel-title">Feeds</div>
-  <div class="field"><label>OPML URL (wireburst export)</label><input type="text" name="opml_url" value="{{ s.opml_url }}" size="60"></div>
+  <div class="field"><label>OPML URL (wireburst export; leave blank to use an uploaded file)</label><input type="text" name="opml_url" value="{{ s.opml_url }}" size="60"></div>
+  {% if feed_list %}
+  <p class="hint">Feed list:
+    {% if feed_list.source == "upload" %}uploaded file {{ feed_list.name }}, {{ feed_list.at[:16] | replace("T", " ") }} UTC
+    {% elif feed_list.source == "url" %}last download from the URL, {{ feed_list.at[:16] | replace("T", " ") }} UTC
+    {% else %}saved copy{% endif %}.
+    {% if feed_list.error %}It could not be read: {{ feed_list.error }}
+    {% else %}{{ feed_list.count }} feeds. Categories: {% for name, n in feed_list.categories.items() %}{{ name }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+  {% if s.opml_url and feed_list.source == "upload" %}<p class="warn">An OPML URL is set, so the next run will download from it and replace the uploaded file.</p>{% endif %}
+  {% else %}
+  <p class="hint">No feed list yet.</p>
+  {% endif %}
+  <div class="field"><label>Upload an OPML file (folders become categories)</label>
+    <input type="file" name="opml" accept=".opml,.xml,text/xml,application/xml" form="opml-upload">
+    <button class="btn" form="opml-upload">Upload</button>
+    {% if notice %}<p class="ok">{{ notice }}</p>{% endif %}
+    <p class="hint">For setups with no OPML URL: the file becomes the feed list until you upload another. If an OPML URL is set, the next run downloads from it and replaces the upload, so clear the URL to keep the file. Only one level of folders is read.</p></div>
   <div class="row">
     <div><label>Keep episodes (days)</label><input type="number" name="retention_days" value="{{ s.retention_days }}" min="1" max="365"></div>
   </div>
@@ -116,4 +132,5 @@
 
 <button class="btn btn-primary">Save settings</button>
 </form>
+<form id="opml-upload" method="post" action="{{ url_for('upload_opml') }}" enctype="multipart/form-data"></form>
 {% endblock %}

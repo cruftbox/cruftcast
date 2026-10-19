@@ -9,6 +9,7 @@ scriptwriter.py chooses from.
 import logging
 import re
 import urllib.request
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -75,13 +76,58 @@ class IngestError(Exception):
 
 # ── Feed list ────────────────────────────────────────────────────────────────
 
+def feed_list_path():
+    """
+    The saved feed list: the last good download from the OPML URL, or an
+    uploaded file. With no URL set it is the only feed list, and nothing
+    overwrites it.
+    """
+    return db.DATA_DIR / "feeds-cache.opml"
+
+
+def save_feed_list(content: bytes, source: str, name: str = "") -> list:
+    """
+    Validate OPML and store it as the feed list. Raises ValueError, without
+    touching the saved copy, if it doesn't parse or lists no feeds.
+    `source` is "url" or "upload"; the settings page shows it.
+    """
+    try:
+        feeds = parse_opml(content)
+    except ET.ParseError as exc:
+        raise ValueError(f"not valid XML ({exc})") from exc
+    if not feeds:
+        raise ValueError("it lists no feeds")
+    feed_list_path().write_bytes(content)
+    with db.get_conn() as conn:
+        db.set_state(conn, "feed_list", {"source": source, "name": name, "at": db.now_iso()})
+    return feeds
+
+
+def feed_list_summary() -> dict | None:
+    """Where the saved feed list came from, its feed count, and feeds per category."""
+    cache = feed_list_path()
+    if not cache.exists():
+        return None
+    with db.get_conn() as conn:
+        origin = db.get_state(conn, "feed_list") or {}
+    try:
+        feeds = parse_opml(cache.read_bytes())
+    except Exception as exc:
+        return {**origin, "error": str(exc), "count": 0, "categories": {}}
+    categories: dict[str, int] = {}
+    for f in feeds:
+        name = f.category or "Uncategorized"
+        categories[name] = categories.get(name, 0) + 1
+    return {**origin, "count": len(feeds), "categories": categories}
+
+
 def load_feeds(settings: dict) -> list[Feed]:
     """
     Fetch the OPML, falling back to the last good copy, and apply exclusions.
     The cache lives next to the database so a wireburst outage doesn't stop
-    the episode.
+    the episode. With no URL, the saved copy (usually an upload) is used.
     """
-    cache = db.DATA_DIR / "feeds-cache.opml"
+    cache = feed_list_path()
     url = settings["opml_url"]
     content = None
     if url:
@@ -89,14 +135,15 @@ def load_feeds(settings: dict) -> list[Feed]:
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
                 content = resp.read()
-            parse_opml(content)  # validate before replacing the cache
-            cache.write_bytes(content)
+            save_feed_list(content, "url", url)
         except Exception as exc:
             log.warning("OPML fetch from %s failed (%s); using cached copy", url, exc)
             content = None
     if content is None:
         if not cache.exists():
-            raise IngestError(f"Could not fetch the feed list from {url or '(no OPML URL set)'} and no cached copy exists")
+            if url:
+                raise IngestError(f"Could not fetch the feed list from {url} and no cached copy exists")
+            raise IngestError("No feed list. Set an OPML URL or upload an OPML file in Settings.")
         content = cache.read_bytes()
 
     excluded_cats = {c.lower() for c in settings["excluded_categories"]}

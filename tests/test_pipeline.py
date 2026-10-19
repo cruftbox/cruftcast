@@ -1,3 +1,4 @@
+import io
 import shutil
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ import pytest
 
 import db
 import feed_generator
+import ingest
 import pipeline
 import scheduler
 import scriptwriter
@@ -107,6 +109,38 @@ def test_hosting_validation():
     assert errors == []
     assert values["sftp_port"] == 24 and values["sftp_path"] == "/"
     assert values["web_hosting"] and not values["local_hosting"]
+
+
+def test_blank_opml_url_is_allowed():
+    form = {k: str(v) for k, v in db.DEFAULT_SETTINGS.items() if isinstance(v, (str, int))}
+    form.update(opml_url="", public_base_url="http://nas:8091", local_hosting="on")
+    values, errors = web.parse_settings_form(form)
+    assert errors == [] and values["opml_url"] == ""
+    form.update(opml_url="nas:8082/opml")
+    _, errors = web.parse_settings_form(form)
+    assert len(errors) == 1 and "OPML URL" in errors[0]
+
+
+def test_opml_upload_route(data_dir):
+    client = web.app.test_client()
+    good = (b"<opml><body><outline text='Weblog'>"
+            b"<outline xmlUrl='https://a/feed' text='A'/></outline></body></opml>")
+
+    def upload(content, name="feeds.opml"):
+        return client.post("/opml/upload", data={"opml": (io.BytesIO(content), name)},
+                           content_type="multipart/form-data")
+
+    resp = upload(good)
+    assert resp.status_code == 302 and "notice=" in resp.location
+    assert ingest.feed_list_path().read_bytes() == good
+    page = client.get("/settings").get_data(as_text=True)
+    assert "uploaded file feeds.opml" in page and "Weblog (1)" in page
+
+    resp = upload(b"<html>not opml</html>", "page.html")
+    assert "error=" in resp.location
+    resp = upload(b"x" * (3 * 1024 * 1024))
+    assert resp.status_code == 302 and "error=" in resp.location
+    assert ingest.feed_list_path().read_bytes() == good
 
 
 def test_local_routes_off_when_local_hosting_off(data_dir):
